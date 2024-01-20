@@ -8,66 +8,72 @@ This optimizer is based on the concept of Simulated Annealing, where we metaphor
 
 # Current Status 🚧
 
-Hold your horses! 🐎 This implementation is still under construction. It's like a half-baked cookie, it has potential, but it's not quite there yet. We're regularly updating the code, adding sprinkles and chocolate chips to make it the best cookie... I mean, optimizer, it can be!
+Currently, the optimizer can be built and run on windows. Note that it is not tested extensively yet, so there may be some issues.
 
-# The Code 🧑‍💻
+# Compiling CUDA Files with NVCC
 
-Here's a sneak peek at the code. It's written in C++ and uses Thrust for parallel operations. It's designed to be used with CUDA, so you can unleash the power of your GPU to find that sweet spot of optimality.
+This guide provides instructions on how to compile CUDA .cu source files using the NVIDIA CUDA Compiler (NVCC) on a Windows system. Please ensure that you have the CUDA Toolkit and Microsoft Visual Studio installed before proceeding.
+
+Prerequisites
+
+- NVIDIA CUDA Toolkit (e.g., CUDA v12.2)
+- Microsoft Visual Studio (e.g., Visual Studio 2022)
+- Windows 10 and 10+ SDK
+
+Setting Up Your Environment
+
+- Set CUDA Flags and Windows SDK Directory
+
+- Before running the NVCC command, set the CUDA flags with the path to your Windows SDK directory. Replace `<Windows_SDK_Dir>` with your Windows SDK path.
+
 
 ```
-#include <thrust/for_each.h>
-#include <thrust/execution_policy.h>
-#include <thrust/random.h>
-
-// Assuming _cons_prec_ntype is a macro for a constant precision numeric type
-// It should be defined before using it, for example:
-// #define _cons_prec_ntype float
-
-template<typename ObjectiveFunction, typename NumericType>
-class SAOptimizer {
-public:
-    SAOptimizer(ObjectiveFunction obj_func, NumericType temperature, NumericType& shared_optimal_value, NumericType* shared_optimal_parameters)
-        : obj_func(obj_func), temperature(temperature), shared_optimal_value(shared_optimal_value), shared_optimal_parameters(shared_optimal_parameters), rng(), dist(0.0f, 1.0f) {}
-
-    __host__ __device__
-    void operator()(int idx, NumericType* vectors, NumericType* objective_values) {
-        // calculate the objective value for the current vector
-        NumericType current_value = obj_func(vectors[idx]);
-
-        // Probabilistic acceptance criterion
-        if (shouldAccept(current_value, objective_values[idx])) {
-            objective_values[idx] = current_value;
-            atomic_update_best_parameters(vectors[idx], current_value);
-        }
-    }
-
-private:
-    ObjectiveFunction obj_func;
-    NumericType temperature;
-    NumericType& shared_optimal_value;
-    NumericType* shared_optimal_parameters;
-    thrust::default_random_engine rng;
-    thrust::uniform_real_distribution<NumericType> dist;
-
-    __host__ __device__
-    bool shouldAccept(NumericType new_value, NumericType old_value) {
-        if (new_value < old_value) {
-            return true;
-        } else {
-            NumericType acceptance_probability = exp(-1 * abs(old_value - new_value) / temperature);
-            return dist(rng) < acceptance_probability;
-        }
-    }
-
-    __device__ void atomic_update_best_parameters(float *address, float *params, int num_params, float new_value, float *best_params) {
-        // ... (snipped for brevity)
-    }
-};
+set CUDAFE_FLAGS=--sdk_dir "<Windows_SDK_Dir>"
 ```
 
-# How to Use 📖
+Example:
+```
+    set CUDAFE_FLAGS=--sdk_dir "C:\Program Files (x86)\Windows Kits\10\"
+```
 
-Currently, the optimizer is like a mysterious ancient artifact; it looks cool, but we're still figuring out how to use it properly. Stay tuned for updates, and we'll soon provide a comprehensive guide on how to integrate this optimizer into your quest for the global minimum.
+Locate Required Paths
+
+- CUDA Toolkit Path: Find the path where CUDA Toolkit is installed.
+
+    Example: C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.2
+
+- Microsoft Visual Studio Compiler Path: Locate the MSVC compiler path in your Visual Studio installation.
+
+    Example: C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.37.32822\bin\HostX64\x64
+
+# Compiling CUDA Files
+
+- Open Command Prompt
+
+- Open a Command Prompt window where you'll run the NVCC compilation command.
+
+- Run NVCC Command
+
+- Use the following command structure to compile your .cu files. Replace the placeholders with the actual paths and file names.
+
+```
+"<Path_to_CUDA_Toolkit>/bin/nvcc.exe" --use-local-env -ccbin "<Path_to_MSVC_Compiler>" -x cu --keep-dir x64\Release -maxrregcount=0 --machine 64 --compile -cudart static -o "<Output_Object_File>" "<Input_CU_File>"
+```
+
+Example:
+
+```
+    "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.2\bin\nvcc.exe" --use-local-env -ccbin "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.37.32822\bin\HostX64\x64" -x cu --keep-dir x64\Release -maxrregcount=0 --machine 64 --compile -cudart static -o "C:\YourProject\x64\Release\YourOutputFile.obj" "C:\YourProject\YourSourceFile.cu"
+```
+- `<Path_to_CUDA_Toolkit>`: Path to your CUDA Toolkit installation.
+- `<Path_to_MSVC_Compiler>`: Path to your MSVC compiler in Visual Studio.
+- `<Output_Object_File>`: Desired path and name of the compiled object file.
+- `<Input_CU_File>`: Path and name of the CUDA .cu source file you want to compile.
+
+## Additional Notes
+
+- The NVCC command provided is configured for Windows systems with Visual Studio. Adjustments might be needed for different environments or CUDA versions.
+
 
 # Contributions 🤝
 
