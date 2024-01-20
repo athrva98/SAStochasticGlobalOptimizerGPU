@@ -26,12 +26,12 @@ Setting Up Your Environment
 
 - Before running the NVCC command, set the CUDA flags with the path to your Windows SDK directory. Replace `<Windows_SDK_Dir>` with your Windows SDK path.
 
-
 ```
 set CUDAFE_FLAGS=--sdk_dir "<Windows_SDK_Dir>"
 ```
 
 Example:
+
 ```
     set CUDAFE_FLAGS=--sdk_dir "C:\Program Files (x86)\Windows Kits\10\"
 ```
@@ -39,11 +39,9 @@ Example:
 Locate Required Paths
 
 - CUDA Toolkit Path: Find the path where CUDA Toolkit is installed.
-
     Example: C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.2
 
 - Microsoft Visual Studio Compiler Path: Locate the MSVC compiler path in your Visual Studio installation.
-
     Example: C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.37.32822\bin\HostX64\x64
 
 # Compiling CUDA Files
@@ -65,6 +63,7 @@ Example:
 ```
     "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.2\bin\nvcc.exe" --use-local-env -ccbin "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.37.32822\bin\HostX64\x64" -x cu --keep-dir x64\Release -maxrregcount=0 --machine 64 --compile -cudart static -o "C:\YourProject\x64\Release\YourOutputFile.obj" "C:\YourProject\YourSourceFile.cu"
 ```
+
 - `<Path_to_CUDA_Toolkit>`: Path to your CUDA Toolkit installation.
 - `<Path_to_MSVC_Compiler>`: Path to your MSVC compiler in Visual Studio.
 - `<Output_Object_File>`: Desired path and name of the compiled object file.
@@ -73,6 +72,13 @@ Example:
 ## Additional Notes
 
 - The NVCC command provided is configured for Windows systems with Visual Studio. Adjustments might be needed for different environments or CUDA versions.
+
+# Some Performance Information
+
+```bash
+Time taken for 2048000000 operations : 14980 milliseconds
+```
+
 
 
 # Contributions 🤝
