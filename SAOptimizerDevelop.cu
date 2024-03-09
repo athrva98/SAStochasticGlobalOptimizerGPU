@@ -1,11 +1,16 @@
 #include <chrono>
+#include <thrust/sequence.h>
+#include <thrust/iterator/zip_iterator.h>
+#include <thrust/copy.h>
+#include <thrust/reduce.h>
+#include <cfloat>
 #include "SAOptimizer.cuh"
 
-typedef double NumericType;
+typedef float NumericType;
 
 template<typename NumericType>
 struct SimpleQuadraticObjectiveFunction {
-    size_t num_params; // Number of parameters
+    size_t num_params;
 
     // Constructor to initialize the number of parameters
     SimpleQuadraticObjectiveFunction(size_t num_params) : num_params(num_params) {}
@@ -16,9 +21,28 @@ struct SimpleQuadraticObjectiveFunction {
         for (size_t i = 0; i < num_params; ++i) {
             sum += params[i] * params[i]; // Square each parameter and add to sum
         }
-        return abs(sum - 50); // Example operation
+        return sum * sum;
     }
 };
+
+
+struct MinIndexOp {
+    __host__ __device__
+    thrust::tuple<size_t, NumericType> operator()(const thrust::tuple<size_t, NumericType>& a,
+                         const thrust::tuple<size_t, NumericType>& b) const {
+        return thrust::get<1>(a) < thrust::get<1>(b) ? a : b;
+    }
+};
+
+
+__global__ void updateVectorsWithBestParams(float* vectors, const float* bestParams, size_t numVectors, size_t numParams) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx > numVectors * numParams) {
+        return;
+    }
+    int paramIdx = idx % numParams;
+    vectors[idx] = bestParams[paramIdx];
+}
 
 template<typename ObjectiveFunctionType, typename NumericType>
 class SimulatedAnnealingOptim {
@@ -49,6 +73,9 @@ public:
             thrust::device_vector<NumericType> d_vectors = h_vectors;
             thrust::device_vector<NumericType> d_objective_values = h_objective_values;
 
+            // Creating a device vector to store the best params per iteration
+            thrust::device_vector<NumericType> d_best_params(m_num_params, 0.0f);
+
             // Iterative optimization approach
             NumericType temperature = m_temperature;
             NumericType best_value = std::numeric_limits<NumericType>::max();
@@ -62,26 +89,39 @@ public:
                     m_warm_start, m_step_size);
 
                 // Call the optimize method
-                optimizer.optimize(256); // Assuming block size of 256, can be adjusted
+                optimizer.optimize(256);
 
                 cudaDeviceSynchronize();
 
+                // Create a sequence of indices
+                thrust::device_vector<size_t> d_indices(d_objective_values.size());
+                thrust::sequence(d_indices.begin(), d_indices.end());
+
+                auto min_tuple = thrust::reduce(thrust::make_zip_iterator(thrust::make_tuple(d_indices.begin(), d_objective_values.begin())),
+                                thrust::make_zip_iterator(thrust::make_tuple(d_indices.end(), d_objective_values.end())),
+                                thrust::make_tuple((size_t)0, FLT_MAX),
+                                MinIndexOp());
+                size_t min_index = thrust::get<0>(min_tuple);
+                float min_value = thrust::get<1>(min_tuple);
+
                 // Update the best parameters and value
-                auto min_element_iter = thrust::min_element(d_objective_values.begin(), d_objective_values.end());
-                size_t min_index = min_element_iter - d_objective_values.begin();
-                if (*min_element_iter < best_value) {
-                    best_value = *min_element_iter;
-                    thrust::copy_n(d_vectors.begin() + min_index * m_num_params, m_num_params, h_best_params.begin());
+                if (min_value < best_value) {
+                    best_value = min_value;
+                    thrust::copy_n(d_vectors.begin() + min_index * m_num_params, m_num_params, d_best_params.begin());
                 }
 
-                // Fill d_vectors with the current best parameters for the next iteration
-                for (size_t i = 0; i < m_num_vectors; ++i) {
-                    thrust::copy(h_best_params.begin(), h_best_params.end(), d_vectors.begin() + i * m_num_params);
-                }
+                // Update d_vectors with the current best parameters
+                int blockSize = 256;
+                int numBlocks = (m_num_vectors * m_num_params + blockSize - 1) / blockSize;
+                updateVectorsWithBestParams<<<numBlocks, blockSize>>>(thrust::raw_pointer_cast(d_vectors.data()),
+                    thrust::raw_pointer_cast(d_best_params.data()),
+                    m_num_vectors, m_num_params);
 
                 temperature *= m_cooling_rate;
             }
 
+            // Finally transfer the best params to the cpu
+            h_best_params = d_best_params;
             // Output the results
             std::cout << "Optimal value: " << best_value << std::endl;
             std::cout << "Optimal parameters: ";
@@ -112,9 +152,9 @@ private:
 int main() {
     const size_t num_params = 2000;
     SimpleQuadraticObjectiveFunction<NumericType> obj_func(num_params);
-    size_t num_threads = 1024;
+    size_t num_threads = 1024 * 64;
     NumericType temperature = 1000.0f;
-    size_t max_iterations = 1000;
+    size_t max_iterations = 10;
     int seed = 1;
     float cooling_rate = 0.95;
     bool warm_start = false;
@@ -137,7 +177,7 @@ int main() {
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
     // Output the time taken
-    std::cout << "Time taken for " << num_params * num_threads * max_iterations << " evaluations : " << duration << " milliseconds" << std::endl;
+    std::cout << "Time taken for " << num_params * num_threads * max_iterations << " operations : " << duration << " milliseconds" << std::endl;
 
     return 0;
 }

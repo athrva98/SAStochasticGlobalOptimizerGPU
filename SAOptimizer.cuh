@@ -83,6 +83,7 @@ private:
 
 
 template<typename ObjectiveFunction, typename NumericType>
+__launch_bounds__(256 /* maxThreadsPerBlock */, 4 /* minBlocksPerMultiprocessor */)
 __global__ void singleEvaluationKernel(ObjectiveFunction obj_func,
     NumericType* old_params, NumericType temperature,
     size_t num_params, unsigned int base_seed,
